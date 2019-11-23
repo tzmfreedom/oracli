@@ -8,6 +8,9 @@ import (
 	"github.com/k0kubun/pp"
 	_ "github.com/mattn/go-oci8"
 	"github.com/urfave/cli"
+	"github.com/olekukonko/tablewriter"
+	_ "golang.org/x/crypto/ssh/terminal"
+	_ "syscall"
 
 	"time"
 
@@ -42,14 +45,23 @@ func main() {
 			Usage: "Service",
 			EnvVar: "ORACLE_SERVICE",
 		},
+		cli.StringFlag{
+			Name:  "query, q",
+			Usage: "Query",
+		},
 	}
 	app.Action = func(context *cli.Context) error {
 		hostname := context.String("hostname")
 		username := context.String("username")
-		password := context.String("password")
 		service := context.String("service")
 		port := context.Int("port")
-		db, err := login(username, password, hostname, service, port)
+		//fmt.Printf("Input your password: ")
+		//password, err := terminal.ReadPassword(int(syscall.Stdin))
+		//if err != nil {
+		//	return err
+		//}
+		password := []byte("Oracle19")
+		db, err := login(username, string(password), hostname, service, port)
 		if err != nil {
 			return err
 		}
@@ -59,7 +71,8 @@ func main() {
 				fmt.Println("Close error is not nil:", err)
 			}
 		}()
-		rows, err := query(db, "SELECT * FROM dual")
+	    q := context.String("query")
+		rows, err := query(db, q)
 		if err != nil {
 			return err
 		}
@@ -99,7 +112,9 @@ func query(db *sql.DB, q string) (map[string]string, error) {
 	values := make([]interface{}, count)
 	valuePtrs := make([]interface{}, count)
 
+	records := [][]string{}
 	for rows.Next() {
+		record := make([]string, count)
 		for i := range columns {
 			valuePtrs[i] = &values[i]
 		}
@@ -109,20 +124,18 @@ func query(db *sql.DB, q string) (map[string]string, error) {
 			return nil, err
 		}
 
-		for i, col := range columns {
-			val := values[i]
-
-			b, ok := val.([]byte)
-			var v interface{}
-			if ok {
-				v = string(b)
-			} else {
-				v = val
-			}
-
-			fmt.Println(col, v)
+		for i, _ := range columns {
+			record[i] = fmt.Sprintf("%v", values[i])
 		}
+		records = append(records, record)
 	}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader(columns)
+	for _, record := range records {
+		table.Append(record)
+	}
+	table.Render()
 
 	err = rows.Err()
 	if err != nil {

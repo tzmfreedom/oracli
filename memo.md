@@ -31,3 +31,9 @@ Cflags: -I${includedir}
   name = "github.com/russross/blackfriday"
   version = "1.5.2"
 ```
+
+sqlplus on Docker
+```bash
+$ export NLS_LANG=Japanese_Japan.AL32UTF8
+$ sqlplus system/Oracle19@localhost/ORCLCDB
+```

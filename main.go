@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli"
 	_ "golang.org/x/crypto/ssh/terminal"
+	"io"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -19,6 +21,10 @@ import (
 	"time"
 
 	"os"
+)
+
+const (
+	HistoryFileName = ".oracli_history"
 )
 
 func main() {
@@ -75,12 +81,14 @@ func main() {
 				fmt.Println("Close error is not nil:", err)
 			}
 		}()
+		histories := readHistories()
 		p := prompt.New(
 			createExecutor(db),
 			completer,
 			prompt.OptionPrefix(">>> "),
 			//prompt.OptionLivePrefix(changeLivePrefix),
 			prompt.OptionTitle("live-prefix-example"),
+			prompt.OptionHistory(histories),
 		)
 		p.Run()
 		return nil
@@ -200,6 +208,26 @@ func completer(in prompt.Document) []prompt.Suggest {
 		{Text: "bash", Description: "Bash"},
 	}
 	return prompt.FilterHasPrefix(s, in.GetWordBeforeCursor(), true)
+}
+
+func readHistories() []string {
+	fp, err := os.Open(HistoryFileName)
+	if err != nil {
+		return []string{}
+	}
+	defer fp.Close()
+	histories := []string{}
+	reader := bufio.NewReaderSize(fp, 4096)
+	for {
+		line, _, err := reader.ReadLine()
+		histories = append(histories, string(line))
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			panic(err)
+		}
+	}
+	return histories
 }
 
 func debug(args ...interface{}) {

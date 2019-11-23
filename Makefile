@@ -1,6 +1,6 @@
 .PHONY: run
 run: format
-	go run .
+	go run . -u system -H localhost -p 1521 -s ORCLCDB
 
 .PHONY: format
 format:

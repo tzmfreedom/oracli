@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/k0kubun/pp"
-	"github.com/mattn/go-oci8"
+	_ "github.com/mattn/go-oci8"
 	"github.com/urfave/cli"
-	"log"
+
 	"time"
 
 	"os"
@@ -23,20 +23,43 @@ func main() {
 		cli.StringFlag{
 			Name:  "hostname, H",
 			Usage: "Hostname",
+			Value: "localhost",
+			EnvVar: "ORACLE_HOSTNAME",
 		},
 		cli.StringFlag{
 			Name:  "username, u",
 			Usage: "Username",
+			EnvVar: "ORACLE_USERNAME",
 		},
 		cli.StringFlag{
-			Name:  "database, d",
-			Usage: "Database",
+			Name:  "port, p",
+			Usage: "Port",
+			Value: "1521",
+			EnvVar: "ORACLE_PORT",
+		},
+		cli.StringFlag{
+			Name:  "service, s",
+			Usage: "Service",
+			EnvVar: "ORACLE_SERVICE",
 		},
 	}
 	app.Action = func(context *cli.Context) error {
-		//hostname := context.String("hostname")
-		//username := context.String("username")
-		rows, err := query("SELECT * FROM dual")
+		hostname := context.String("hostname")
+		username := context.String("username")
+		password := context.String("password")
+		service := context.String("service")
+		port := context.Int("port")
+		db, err := login(username, password, hostname, service, port)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			err := db.Close()
+			if err != nil {
+				fmt.Println("Close error is not nil:", err)
+			}
+		}()
+		rows, err := query(db, "SELECT * FROM dual")
 		if err != nil {
 			return err
 		}
@@ -49,12 +72,9 @@ func main() {
 	}
 }
 
-func query(q string) (map[string]string, error) {
-	var username, password, service string
-	var port int
-
+func login(username, password, hostname, service string, port int) (*sql.DB, error) {
 	// [username/[password]@]host[:port][/service_name][?param1=value1&...&paramN=valueN]
-	openString := fmt.Sprintf("%s@%s:%d/%s", username, password, port, service)
+	openString := fmt.Sprintf("%s:%s@%s:%d/%s", username, password, hostname, port, service)
 
 	db, err := sql.Open("oci8", openString)
 	if err != nil {
@@ -63,19 +83,14 @@ func query(q string) (map[string]string, error) {
 	if db == nil {
 		return nil, errors.New("db is nil")
 	}
+	return db, nil
+}
 
-	// defer close database
-	defer func() {
-		err = db.Close()
-		if err != nil {
-			fmt.Println("Close error is not nil:", err)
-		}
-	}()
-
+func query(db *sql.DB, q string) (map[string]string, error) {
 	var rows *sql.Rows
 	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
 	defer cancel()
-	rows, err = db.QueryContext(ctx, q)
+	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, err
 	}

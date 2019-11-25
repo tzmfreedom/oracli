@@ -1,0 +1,14 @@
+prefix=/devel/target/XXXXXXXXXXXXXXXXXXXXXXXXXX
+exec_prefix=${prefix}
+libdir=/go/src/github.com/tzmfreedom/oracli/oracle/instantclient_19_5
+includedir=/go/src/github.com/tzmfreedom/oracli/oracle/instantclient_19_5/sdk/include
+
+glib_genmarshal=glib-genmarshal
+gobject_query=gobject-query
+glib_mkenums=glib-mkenums
+
+Name: oci8
+Description: oci8 library
+Libs: -L${libdir} -lclntsh
+Cflags: -I${includedir}
+Version: 19.3

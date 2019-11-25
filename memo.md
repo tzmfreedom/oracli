@@ -37,3 +37,16 @@ sqlplus on Docker
 $ export NLS_LANG=Japanese_Japan.AL32UTF8
 $ sqlplus system/Oracle19@localhost/ORCLCDB
 ```
+
+## Linux
+
+```bash
+$ export PKG_CONFIG_PATH=/go/src/github.com/tzmfreedom/oracli/oracle/instantclient_19_5
+$ export LD_LIBRARY_PATH=/go/src/github.com/tzmfreedom/oracli/oracle/instantclient_19_5
+```
+
+```bash
+$ apt-get install libaio1 libaio-dev
+```
+
+Install oracle basic and sdk

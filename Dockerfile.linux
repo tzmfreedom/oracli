@@ -1,0 +1,6 @@
+FROM golang:latest
+
+RUN apt-get update
+RUN apt-get install -y vim libaio1 libaio-dev
+RUN mkdir /go/bin
+RUN curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh

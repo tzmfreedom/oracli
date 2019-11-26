@@ -13,6 +13,7 @@ import (
 	"github.com/urfave/cli"
 	_ "golang.org/x/crypto/ssh/terminal"
 	"io"
+	"io/ioutil"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -157,16 +158,10 @@ func query(db *sql.DB, q string) ([]string, [][]string, error) {
 
 func createExecutor(db *sql.DB) func(string) {
 	rCmd := regexp.MustCompile(`^:.*`)
-	//rDesc := regexp.MustCompile(`^(?i)desc\s`)
 	rSelect := regexp.MustCompile(`^(?i)select\s`)
+	rDesc := regexp.MustCompile(`^(?i)describe\s`)
+	rExec := regexp.MustCompile(`^(?i)execute\s+(.+)`)
 	return func(in string) {
-		//if in == "" {
-		//	LivePrefixState.IsEnable = false
-		//	LivePrefixState.LivePrefix = in
-		//	return
-		//}
-		//LivePrefixState.LivePrefix = in + "> "
-		//LivePrefixState.IsEnable = true
 		if rCmd.MatchString(in) {
 			cmdFields := strings.Fields(in[1:])
 			cmd := exec.Command(cmdFields[0], cmdFields[1:]...)
@@ -179,8 +174,20 @@ func createExecutor(db *sql.DB) func(string) {
 			}
 			return
 		}
-		if rSelect.MatchString(in) {
+		if rSelect.MatchString(in) || rDesc.MatchString(in) {
 			columns, records, err := query(db, in)
+			printRecords(columns, records)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
+		}
+		if rExec.MatchString(in) {
+			file := rExec.FindStringSubmatch(in)[1]
+			sql, err := ioutil.ReadFile(file)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
+			columns, records, err := query(db, string(sql))
 			printRecords(columns, records)
 			if err != nil {
 				fmt.Println(err.Error())
@@ -205,7 +212,9 @@ func completer(in prompt.Document) []prompt.Suggest {
 		{Text: "delete", Description: "DELETE"},
 		{Text: "update", Description: "UPDATE"},
 		{Text: "desc", Description: "DESC"},
-		{Text: "bash", Description: "Bash"},
+		{Text: "out", Description: "OUT"},
+		{Text: "execute", Description: "IN"},
+		{Text: ":", Description: "COMMAND"},
 	}
 	return prompt.FilterHasPrefix(s, in.GetWordBeforeCursor(), true)
 }

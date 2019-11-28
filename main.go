@@ -163,11 +163,35 @@ func query(db *sql.DB, q string) ([]string, [][]string, error) {
 	return columns, records, nil
 }
 
+func executeDDL(db *sql.DB, q string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
+	defer cancel()
+	_, err := db.ExecContext(ctx, q)
+	return err
+}
+
+func executeDML(db *sql.DB, q string) (int64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
+	defer cancel()
+	result, err := db.ExecContext(ctx, q)
+	if err != nil {
+		return 0, err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return rowsAffected, nil
+}
+
 func createExecutor(db *sql.DB) func(string) {
 	rCmd := regexp.MustCompile(`^:.*`)
 	rSelect := regexp.MustCompile(`^(?i)select\s`)
+	rExecDML := regexp.MustCompile(`^(?i)(insert|update|delete|truncate)\s`)
+	rCreate := regexp.MustCompile(`^(?i)create\s`)
+	rDrop := regexp.MustCompile(`^(?i)drop\s`)
 	rDesc := regexp.MustCompile(`^(?i)describe\s`)
-	rExec := regexp.MustCompile(`^(?i)execute\s+(.+)`)
+	rShellExec := regexp.MustCompile(`^(?i)execute\s+(.+)`)
 	rExtra := regexp.MustCompile(`^(?i)\\(.)`)
 	return func(in string) {
 		if rCmd.MatchString(in) {
@@ -186,20 +210,44 @@ func createExecutor(db *sql.DB) func(string) {
 			columns, records, err := query(db, in)
 			printRecords(columns, records)
 			if err != nil {
-				fmt.Println(err.Error())
+				printError(err)
 			}
+			return
 		}
-		if rExec.MatchString(in) {
-			file := rExec.FindStringSubmatch(in)[1]
+		if rExecDML.MatchString(in) {
+			rowsAffected, err := executeDML(db, in)
+			if err != nil {
+				printError(err)
+			} else {
+				fmt.Printf("RowsAffected: %d\n", rowsAffected)
+			}
+			return
+		}
+		if rCreate.MatchString(in) || rDrop.MatchString(in) {
+			err := executeDDL(db, in)
+			if err != nil {
+				printError(err)
+			} else {
+				if rCreate.MatchString(in) {
+					fmt.Println("Create: success")
+				} else {
+					fmt.Println("Drop: success")
+				}
+			}
+			return
+		}
+		if rShellExec.MatchString(in) {
+			file := rShellExec.FindStringSubmatch(in)[1]
 			sql, err := ioutil.ReadFile(file)
 			if err != nil {
-				fmt.Println(err.Error())
+				printError(err)
 			}
 			columns, records, err := query(db, string(sql))
 			printRecords(columns, records)
 			if err != nil {
-				fmt.Println(err.Error())
+				printError(err)
 			}
+			return
 		}
 		if rExtra.MatchString(in) {
 			cmd := rExtra.FindStringSubmatch(in)[1]
@@ -267,6 +315,10 @@ func readHistories() []string {
 		}
 	}
 	return histories
+}
+
+func printError(err error) {
+	fmt.Fprintln(os.Stderr, err.Error())
 }
 
 func debug(args ...interface{}) {

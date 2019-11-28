@@ -11,17 +11,15 @@ import (
 	_ "github.com/mattn/go-oci8"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli"
-	_ "golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/crypto/ssh/terminal"
 	"io"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
-	_ "syscall"
-
+	"syscall"
 	"time"
-
-	"os"
 )
 
 const (
@@ -73,13 +71,8 @@ func main() {
 		username := context.String("username")
 		service := context.String("service")
 		port := context.Int("port")
-		//fmt.Printf("Input your password: ")
-		//password, err := terminal.ReadPassword(int(syscall.Stdin))
-		//if err != nil {
-		//	return err
-		//}
-		password := []byte("Oracle19")
-		db, err := login(username, string(password), hostname, service, port)
+		password, err := getPassword()
+		db, err := login(username, password, hostname, service, port)
 		if err != nil {
 			return err
 		}
@@ -319,6 +312,19 @@ func readHistories() []string {
 
 func printError(err error) {
 	fmt.Fprintln(os.Stderr, err.Error())
+}
+
+func getPassword() (string, error) {
+	if true {
+		return "Oracle19", nil
+	} else {
+		fmt.Printf("Input your password: ")
+		password, err := terminal.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return "", err
+		}
+		return string(password), nil
+	}
 }
 
 func debug(args ...interface{}) {

@@ -9,6 +9,7 @@ import (
 	"github.com/c-bata/go-prompt"
 	"github.com/k0kubun/pp"
 	_ "github.com/mattn/go-oci8"
+	"github.com/mitchellh/go-homedir"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli"
 	"golang.org/x/crypto/ssh/terminal"
@@ -16,6 +17,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
@@ -82,9 +84,21 @@ func main() {
 				fmt.Println("Close error is not nil:", err)
 			}
 		}()
-		histories := readHistories()
+		histories, err := readHistories()
+		if err != nil {
+			return err
+		}
+		home, err := homedir.Dir()
+		if err != nil {
+			panic(err) // TODO: impl
+		}
+		fp, err := os.OpenFile(filepath.Join(home, HistoryFileName), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		if err != nil {
+			panic(err) // TODO: impl
+		}
+		defer fp.Close()
 		p := prompt.New(
-			createExecutor(db),
+			createExecutor(db, fp),
 			completer,
 			prompt.OptionPrefix(">>> "),
 			//prompt.OptionLivePrefix(changeLivePrefix),
@@ -177,7 +191,7 @@ func executeDML(db *sql.DB, q string) (int64, error) {
 	return rowsAffected, nil
 }
 
-func createExecutor(db *sql.DB) func(string) {
+func createExecutor(db *sql.DB, history *os.File) func(string) {
 	rCmd := regexp.MustCompile(`^:.*`)
 	rSelect := regexp.MustCompile(`^(?i)select\s`)
 	rExecDML := regexp.MustCompile(`^(?i)(insert|update|delete|truncate)\s`)
@@ -186,7 +200,11 @@ func createExecutor(db *sql.DB) func(string) {
 	rDesc := regexp.MustCompile(`^(?i)describe\s`)
 	rShellExec := regexp.MustCompile(`^(?i)execute\s+(.+)`)
 	rExtra := regexp.MustCompile(`^(?i)\\(.)`)
+	rExit := regexp.MustCompile(`^(?i)exit\s*$`)
 	return func(in string) {
+		if in != "" {
+			historyAppend(in, history)
+		}
 		if rCmd.MatchString(in) {
 			cmdFields := strings.Fields(in[1:])
 			cmd := exec.Command(cmdFields[0], cmdFields[1:]...)
@@ -255,6 +273,8 @@ func createExecutor(db *sql.DB) func(string) {
 				}
 			}
 		}
+		if rExit.MatchString(in) {
+		}
 	}
 }
 
@@ -290,10 +310,14 @@ func completer(in prompt.Document) []prompt.Suggest {
 	return prompt.FilterHasPrefix(s, in.GetWordBeforeCursor(), true)
 }
 
-func readHistories() []string {
-	fp, err := os.Open(HistoryFileName)
+func readHistories() ([]string, error) {
+	home, err := homedir.Dir()
 	if err != nil {
-		return []string{}
+		return []string{}, nil
+	}
+	fp, err := os.Open(filepath.Join(home, HistoryFileName))
+	if err != nil {
+		return []string{}, nil
 	}
 	defer fp.Close()
 	histories := []string{}
@@ -304,10 +328,10 @@ func readHistories() []string {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			panic(err)
+			return nil, err
 		}
 	}
-	return histories
+	return histories, nil
 }
 
 func printError(err error) {
@@ -325,6 +349,10 @@ func getPassword() (string, error) {
 		}
 		return string(password), nil
 	}
+}
+
+func historyAppend(history string, fp *os.File) {
+	fmt.Fprintln(fp, history)
 }
 
 func debug(args ...interface{}) {

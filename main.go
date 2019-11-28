@@ -28,6 +28,13 @@ const (
 	HistoryFileName = ".oracli_history"
 )
 
+var mode int
+
+const (
+	ModeTable = iota
+	ModeExpand
+)
+
 func main() {
 	app := cli.NewApp()
 	app.Name = "oracli"
@@ -161,6 +168,7 @@ func createExecutor(db *sql.DB) func(string) {
 	rSelect := regexp.MustCompile(`^(?i)select\s`)
 	rDesc := regexp.MustCompile(`^(?i)describe\s`)
 	rExec := regexp.MustCompile(`^(?i)execute\s+(.+)`)
+	rExtra := regexp.MustCompile(`^(?i)\\(.)`)
 	return func(in string) {
 		if rCmd.MatchString(in) {
 			cmdFields := strings.Fields(in[1:])
@@ -193,16 +201,38 @@ func createExecutor(db *sql.DB) func(string) {
 				fmt.Println(err.Error())
 			}
 		}
+		if rExtra.MatchString(in) {
+			cmd := rExtra.FindStringSubmatch(in)[1]
+			switch cmd {
+			case "x":
+				if mode == ModeTable {
+					mode = ModeExpand
+					fmt.Println("Change Mode: expand")
+				} else {
+					mode = ModeTable
+					fmt.Println("Change Mode: table")
+				}
+			}
+		}
 	}
 }
 
 func printRecords(columns []string, records [][]string) {
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader(columns)
-	for _, record := range records {
-		table.Append(record)
+	if mode == ModeTable {
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader(columns)
+		for _, record := range records {
+			table.Append(record)
+		}
+		table.Render()
+	} else {
+		for i, record := range records {
+			fmt.Printf("*************************** %d. row ***************************\n", i)
+			for j, column := range columns {
+				fmt.Printf("%s: %s\n", column, record[j])
+			}
+		}
 	}
-	table.Render()
 }
 
 func completer(in prompt.Document) []prompt.Suggest {

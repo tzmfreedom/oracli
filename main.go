@@ -191,13 +191,17 @@ func executeDML(db *sql.DB, q string) (int64, error) {
 	return rowsAffected, nil
 }
 
+func describe(db *sql.DB, table string) ([]string, [][]string, error) {
+	return query(db, fmt.Sprintf("SELECT * FROM xxx WHERE = %s", table))
+}
+
 func createExecutor(db *sql.DB, history *os.File) func(string) {
 	rCmd := regexp.MustCompile(`^:.*`)
 	rSelect := regexp.MustCompile(`^(?i)select\s`)
 	rExecDML := regexp.MustCompile(`^(?i)(insert|update|delete|truncate)\s`)
 	rCreate := regexp.MustCompile(`^(?i)create\s`)
 	rDrop := regexp.MustCompile(`^(?i)drop\s`)
-	rDesc := regexp.MustCompile(`^(?i)describe\s`)
+	rDesc := regexp.MustCompile(`^(?i)desc(ribe)?\s+(.+)`)
 	rShellExec := regexp.MustCompile(`^(?i)execute\s+(.+)`)
 	rExtra := regexp.MustCompile(`^(?i)\\(.)`)
 	rExit := regexp.MustCompile(`^(?i)exit\s*$`)
@@ -217,8 +221,20 @@ func createExecutor(db *sql.DB, history *os.File) func(string) {
 			}
 			return
 		}
-		if rSelect.MatchString(in) || rDesc.MatchString(in) {
+		if rSelect.MatchString(in) {
 			columns, records, err := query(db, in)
+			printRecords(columns, records)
+			if err != nil {
+				printError(err)
+			}
+			return
+		}
+		if rDesc.MatchString(in) {
+			table := rDesc.FindStringSubmatch(in)[1]
+			columns, records, err := describe(db, table)
+			if err != nil {
+				printError(err)
+			}
 			printRecords(columns, records)
 			if err != nil {
 				printError(err)
